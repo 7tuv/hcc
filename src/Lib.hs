@@ -1,18 +1,22 @@
 module Lib
-    ( output
+    ( genAssemblyCode
     ) where
 
-import System.Environment (getArgs)
+genAssemblyCode :: String -> [String]
+genAssemblyCode text =
+    concat [assemblyCodeHead, assemblyCodeBody text]
 
-output :: IO ()
-output = do
-    args <- getArgs
-    if 1 /= length args
-    then
-        putStrLn "1 argument is requierd."
-    else do
-        putStrLn ".intel_syntax noprefix"
-        putStrLn ".global main"
-        putStrLn "main:"
-        putStrLn $ "  mov rax, " ++ head args
-        putStrLn "  ret"
+assemblyCodeHead :: [String]
+assemblyCodeHead =
+    [
+     ".intel_syntax noprefix",
+     ".global main"
+    ]
+
+assemblyCodeBody :: String -> [String]
+assemblyCodeBody text =
+    [
+     "main:",
+     "  mov rax, " ++ text,
+     "  ret"
+    ]
