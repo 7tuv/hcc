@@ -63,7 +63,7 @@ parser xs = let result = opOrder4 (Empty, xs)
 -- [Token]: これからパースする残りのトークン
 
 -- operations: '+', '-'
--- LEFT assosiative
+-- LEFT associative
 opOrder4 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder4 (ptree, xs) = opOrder4' $ opOrder3 (ptree, xs)
 
@@ -78,7 +78,7 @@ opOrder4' (ptree, x:xs)
         (ptree, x:xs)
 
 -- operations: '*', '/'
--- LEFT assosiative
+-- LEFT associative
 opOrder3 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder3 (ptree, xs) = opOrder3' $ opOrder1 (ptree, xs)
 
