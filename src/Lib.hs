@@ -46,6 +46,11 @@ tokenizer (x:xs)
         in Number (take len $ x:xs) : (tokenizer . drop len $ x:xs)
     | otherwise   = error "tokenizer function failed"
 
+-- 与えられた文字列の先頭に含まれる整数の長さを返す
+-- numLength "250" -> 3
+-- numLength "40zxc" -> 2
+-- numLength "abc234" -> 0
+-- numLength "q1w2e3r" -> 0
 numLength :: String -> Int
 numLength "" = 0
 numLength (x:xs)
@@ -94,13 +99,14 @@ opOrder3' (ptree, x:xs)
 
 -- operations: ()
 opOrder1 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder1 (ptree, (Symbol '(') : xs) = let (nptree, nxs) = opOrder4 (Empty, xs)
-                                      in  case nxs of
-                                            []                 -> error "There is no closing parenthesis"
-                                            x:xxs
-                                             | x == Symbol ')' -> (nptree, xxs)
-                                             | otherwise       -> error "opOrder function failed"
-opOrder1 (ptree, (Number x) : xs)   = (Leaf (Number x), xs)
+opOrder1 (ptree, (Symbol '(') : xs) =
+    let (nptree, nxs) = opOrder4 (Empty, xs)
+    in  case nxs of
+    []                 -> error "There is no closing parenthesis"
+    x:xxs
+     | x == Symbol ')' -> (nptree, xxs)
+     | otherwise       -> error "opOrder function failed"
+opOrder1 (ptree, (Number x) : xs) = (Leaf (Number x), xs)
 opOrder1 x = error "opOrder function failed"
 
 -- 構文木からアセンブリコードを生成する
