@@ -85,7 +85,7 @@ parser xs = stmt xs
 stmt :: [Token] -> [ParseTree Token]
 stmt [] = []
 stmt xs =
-    let (ptree, nxs) = opOrder14 (Empty, xs)
+    let (ptree, nxs) = opOrder14 xs
     in  case nxs of
         [] -> error "';' was not found at the end of a sentence."
         (x:_)
@@ -94,14 +94,14 @@ stmt xs =
 
 -- operations: '='
 -- RIGHT associative
-opOrder14 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder14 (ptree, xs) = opOrder14' $ opOrder4 (ptree, xs)
+opOrder14 :: [Token] -> (ParseTree Token, [Token])
+opOrder14 xs = opOrder14' $ opOrder4 xs
 
 opOrder14' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder14' (ptree, []) = (ptree, [])
 opOrder14' (ptree, x:xs)
     | x == Symbol '=' =
-        let (nptree, nxs) = opOrder4 (ptree, xs)
+        let (nptree, nxs) = opOrder4 xs
             (rptree, nnxs) = opOrder14' (nptree, nxs)
         in (Tree x ptree rptree, nnxs)
     | otherwise =
@@ -109,14 +109,14 @@ opOrder14' (ptree, x:xs)
 
 -- operations: '+', '-'
 -- LEFT associative
-opOrder4 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder4 (ptree, xs) = opOrder4' $ opOrder3 (ptree, xs)
+opOrder4 :: [Token] -> (ParseTree Token, [Token])
+opOrder4 xs = opOrder4' $ opOrder3 xs
 
 opOrder4' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder4' (ptree, []) = (ptree, [])
 opOrder4' (ptree, x:xs)
     | x == Symbol '+' || x == Symbol '-' =
-        let (rptree, nxs) = opOrder3 (ptree, xs)
+        let (rptree, nxs) = opOrder3 xs
             nptree = Tree x ptree rptree
         in  opOrder4' (nptree, nxs)
     | otherwise =
@@ -124,30 +124,30 @@ opOrder4' (ptree, x:xs)
 
 -- operations: '*', '/'
 -- LEFT associative
-opOrder3 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder3 (ptree, xs) = opOrder3' $ opOrder1 (ptree, xs)
+opOrder3 :: [Token] -> (ParseTree Token, [Token])
+opOrder3 xs = opOrder3' $ opOrder1 xs
 
 opOrder3' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder3' (ptree, []) = (ptree, [])
 opOrder3' (ptree, x:xs)
     | x == Symbol '*' || x == Symbol '/' =
-        let (rptree, nxs) = opOrder1 (ptree, xs)
+        let (rptree, nxs) = opOrder1 xs
             nptree = Tree x ptree rptree
         in  opOrder3' (nptree, nxs)
     | otherwise =
         (ptree, x:xs)
 
 -- operations: ()
-opOrder1 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder1 (ptree, (Symbol '(') : xs) =
-    let (nptree, nxs) = opOrder14 (Empty, xs)
+opOrder1 :: [Token] -> (ParseTree Token, [Token])
+opOrder1 ((Symbol '(') : xs) =
+    let (ptree, nxs) = opOrder14 xs  -- カッコで囲まれている部分のトークンをパースする
     in  case nxs of
     []                 -> error "There is no closing parenthesis."
     x:xxs
-     | x == Symbol ')' -> (nptree, xxs)
+     | x == Symbol ')' -> (ptree, xxs)
      | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
-opOrder1 (ptree, (Number x) : xs)   = (Leaf (Number x), xs)
-opOrder1 (ptree, (Variable x) : xs) = (Leaf (Variable x), xs)
+opOrder1 ((Number x) : xs)   = (Leaf (Number x), xs)
+opOrder1 ((Variable x) : xs) = (Leaf (Variable x), xs)
 opOrder1 x = error "opOrder function failed."
 
 -- 構文木からアセンブリコードを生成する
