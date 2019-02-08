@@ -3,10 +3,10 @@ module Lib
     ) where
 
 import Data.List (elemIndex)
-import Data.Char (isDigit)
+import Data.Char (isDigit, isLower, ord)
 
 data ParseTree a = Empty | Leaf a | Tree a (ParseTree a) (ParseTree a) deriving (Show, Eq)
-data Token = Number String | Symbol Char deriving (Show, Eq)
+data Token = Number String | Symbol Char | Variable Char deriving (Show, Eq)
 
 genAssemblyCode :: String -> [String]
 genAssemblyCode text =
@@ -25,10 +25,27 @@ assemblyCodeBody text =
      "main:"
     ]
     ++
-    (genCode $ parser $ tokenizer text)
+    prologue
     ++
+    (concat $ map genCode $ parser $ tokenizer text)
+    ++
+    ["  pop rax"]
+    ++
+    epilogue
+
+prologue :: [String]
+prologue =
     [
-     "  pop rax",
+     "  push rbp",
+     "  mov rbp, rsp",
+     "  sub rsp, " ++ (show $ 8 * 26)
+    ]
+
+epilogue :: [String]
+epilogue =
+    [
+     "  mov rsp, rbp",
+     "  pop rbp",
      "  ret"
     ]
 
@@ -41,9 +58,12 @@ tokenizer (x:xs)
     | x == '/'  = Symbol '/' : tokenizer xs
     | x == '('  = Symbol '(' : tokenizer xs
     | x == ')'  = Symbol ')' : tokenizer xs
+    | x == '='  = Symbol '=' : tokenizer xs
+    | x == ';'  = Symbol ';' : tokenizer xs
     | isDigit x =
         let len = numLength (x:xs)
         in Number (take len $ x:xs) : (tokenizer . drop len $ x:xs)
+    | isLower x = Variable x : tokenizer xs
     | otherwise   = error "tokenizer function failed"
 
 -- 与えられた文字列の先頭に含まれる整数の長さを返す
@@ -57,15 +77,40 @@ numLength (x:xs)
     | isDigit x = 1 + numLength xs
     | otherwise = 0
 
-parser :: [Token] -> ParseTree Token
-parser xs = let result = opOrder4 (Empty, xs)
-            in case result of
-                (ptree, xxs)
-                 | xxs /= [] -> error "parser function failed"
-                 | otherwise -> ptree
+parser :: [Token] -> [ParseTree Token]
+parser xs = stmt xs
+-- parser xs = let result = opOrder14 (Empty, xs)
+--             in case result of
+--                 (ptree, xxs)
+--                  | xxs /= [] -> error "parser function failed"
+--                  | otherwise -> ptree
 
 -- ParseTree: パースが完了した分の構文解析木
 -- [Token]: これからパースする残りのトークン
+stmt :: [Token] -> [ParseTree Token]
+stmt [] = []
+stmt xs =
+    let (ptree, nxs) = opOrder14 (Empty, xs)
+    in  case nxs of
+        [] -> error "';' was not found at the end of a sentence."
+        (x:_)
+            | x == Symbol ';' -> ptree : (stmt $ tail nxs)
+            | otherwise       -> error "stmt function failed."
+
+-- operations: '='
+-- RIGHT associative
+opOrder14 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
+opOrder14 (ptree, xs) = opOrder14' $ opOrder4 (ptree, xs)
+
+opOrder14' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
+opOrder14' (ptree, []) = (ptree, [])
+opOrder14' (ptree, x:xs)
+    | x == Symbol '=' =
+        let (nptree, nxs) = opOrder4 (ptree, xs)
+            (rptree, nnxs) = opOrder14' (nptree, nxs)
+        in (Tree x ptree rptree, nnxs)
+    | otherwise =
+        (ptree, x:xs)
 
 -- operations: '+', '-'
 -- LEFT associative
@@ -100,18 +145,38 @@ opOrder3' (ptree, x:xs)
 -- operations: ()
 opOrder1 :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder1 (ptree, (Symbol '(') : xs) =
-    let (nptree, nxs) = opOrder4 (Empty, xs)
+    let (nptree, nxs) = opOrder14 (Empty, xs)
     in  case nxs of
-    []                 -> error "There is no closing parenthesis"
+    []                 -> error "There is no closing parenthesis."
     x:xxs
      | x == Symbol ')' -> (nptree, xxs)
-     | otherwise       -> error "opOrder function failed"
-opOrder1 (ptree, (Number x) : xs) = (Leaf (Number x), xs)
-opOrder1 x = error "opOrder function failed"
+     | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
+opOrder1 (ptree, (Number x) : xs)   = (Leaf (Number x), xs)
+opOrder1 (ptree, (Variable x) : xs) = (Leaf (Variable x), xs)
+opOrder1 x = error "opOrder function failed."
 
 -- 構文木からアセンブリコードを生成する
 genCode :: ParseTree Token -> [String]
 genCode (Leaf (Number x)) = ["  push " ++ x]
+genCode (Leaf x) =
+    genLval (Leaf x)
+    ++
+    [
+     "   pop rax",
+     "   mov rax, [rax]",
+     "   push rax"
+    ]
+genCode (Tree (Symbol '=') lptree rptree) =
+    genLval lptree
+    ++
+    genCode rptree
+    ++
+    [
+     "  pop rdi",
+     "  pop rax",
+     "  mov [rax], rdi",
+     "  push rdi"
+    ]
 genCode (Tree (Symbol x) lptree rptree) =
     genCode lptree
     ++
@@ -130,7 +195,19 @@ genCode (Tree (Symbol x) lptree rptree) =
                  "  mov rdx, 0",
                  "  div rdi"
                 ]
-        _   -> error $ "calcCode function failed: " ++ [x] ++ " is invalid operator" 
+        _   -> error $ "calcCode function failed: expected -> \"+-*/\", but actual -> " ++ (show x) ++ " ."
     ++
     ["  push rax"]
-genCode Empty = error "calcCode function failed"
+genCode Empty = error "calcCode function failed."
+
+--  左辺値のアドレスを push する
+genLval :: ParseTree Token -> [String]
+genLval (Leaf (Variable x)) =
+    let offset = (ord x - ord 'a' + 1) * 8
+    in
+    [
+     "  mov rax, rbp",
+     "  sub rax, " ++ show offset ,
+     "  push rax"
+    ]
+genLval _ = error "genLval function failed."
