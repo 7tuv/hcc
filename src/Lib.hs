@@ -79,11 +79,6 @@ numLength (x:xs)
 
 parser :: [Token] -> [ParseTree Token]
 parser xs = stmt xs
--- parser xs = let result = opOrder14 (Empty, xs)
---             in case result of
---                 (ptree, xxs)
---                  | xxs /= [] -> error "parser function failed"
---                  | otherwise -> ptree
 
 -- ParseTree: パースが完了した分の構文解析木
 -- [Token]: これからパースする残りのトークン
