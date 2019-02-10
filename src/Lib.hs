@@ -49,6 +49,8 @@ epilogue =
      "  ret"
     ]
 
+
+---- トークナイザ ----
 tokenizer :: String -> [Token]
 tokenizer ""        = []
 tokenizer (x:xs)
@@ -77,6 +79,8 @@ numLength (x:xs)
     | isDigit x = 1 + numLength xs
     | otherwise = 0
 
+
+---- パーサ ----
 parser :: [Token] -> [ParseTree Token]
 parser xs = stmt xs
 
@@ -150,6 +154,8 @@ opOrder1 ((Number x) : xs)   = (Leaf (Number x), xs)
 opOrder1 ((Variable x) : xs) = (Leaf (Variable x), xs)
 opOrder1 x = error "opOrder function failed."
 
+
+---- コード生成 ----
 -- 構文木からアセンブリコードを生成する
 genCode :: ParseTree Token -> [String]
 genCode (Leaf (Number x)) = ["  push " ++ x]
