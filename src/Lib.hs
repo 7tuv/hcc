@@ -6,7 +6,7 @@ import Data.List (elemIndex)
 import Data.Char (isDigit, isLower, ord)
 
 data ParseTree a = Empty | Leaf a | Tree a (ParseTree a) (ParseTree a) deriving (Show, Eq)
-data Token = Number String | Symbol Char | Variable Char deriving (Show, Eq)
+data Token = Number String | Symbol String | Variable Char deriving (Show, Eq)
 
 genAssemblyCode :: String -> [String]
 genAssemblyCode text =
@@ -54,14 +54,14 @@ epilogue =
 tokenizer :: String -> [Token]
 tokenizer ""        = []
 tokenizer (x:xs)
-    | x == '+'  = Symbol '+' : tokenizer xs
-    | x == '-'  = Symbol '-' : tokenizer xs
-    | x == '*'  = Symbol '*' : tokenizer xs
-    | x == '/'  = Symbol '/' : tokenizer xs
-    | x == '('  = Symbol '(' : tokenizer xs
-    | x == ')'  = Symbol ')' : tokenizer xs
-    | x == '='  = Symbol '=' : tokenizer xs
-    | x == ';'  = Symbol ';' : tokenizer xs
+    | x == '+'  = Symbol "+" : tokenizer xs
+    | x == '-'  = Symbol "-" : tokenizer xs
+    | x == '*'  = Symbol "*" : tokenizer xs
+    | x == '/'  = Symbol "/" : tokenizer xs
+    | x == '('  = Symbol "(" : tokenizer xs
+    | x == ')'  = Symbol ")" : tokenizer xs
+    | x == '='  = Symbol "=" : tokenizer xs
+    | x == ';'  = Symbol ";" : tokenizer xs
     | isDigit x =
         let len = numLength (x:xs)
         in Number (take len $ x:xs) : (tokenizer . drop len $ x:xs)
@@ -93,7 +93,7 @@ stmt xs =
     in  case nxs of
         [] -> error "';' was not found at the end of a sentence."
         (x:_)
-            | x == Symbol ';' -> ptree : (stmt $ tail nxs)
+            | x == Symbol ";" -> ptree : (stmt $ tail nxs)
             | otherwise       -> error "stmt function failed."
 
 -- operations: '='
@@ -104,7 +104,7 @@ opOrder14 xs = opOrder14' $ opOrder4 xs
 opOrder14' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder14' (ptree, []) = (ptree, [])
 opOrder14' (ptree, x:xs)
-    | x == Symbol '=' =
+    | x == Symbol "=" =
         let (nptree, nxs) = opOrder4 xs
             (rptree, nnxs) = opOrder14' (nptree, nxs)
         in (Tree x ptree rptree, nnxs)
@@ -119,7 +119,7 @@ opOrder4 xs = opOrder4' $ opOrder3 xs
 opOrder4' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder4' (ptree, []) = (ptree, [])
 opOrder4' (ptree, x:xs)
-    | x == Symbol '+' || x == Symbol '-' =
+    | x == Symbol "+" || x == Symbol "-" =
         let (rptree, nxs) = opOrder3 xs
             nptree = Tree x ptree rptree
         in  opOrder4' (nptree, nxs)
@@ -134,7 +134,7 @@ opOrder3 xs = opOrder3' $ opOrder1 xs
 opOrder3' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder3' (ptree, []) = (ptree, [])
 opOrder3' (ptree, x:xs)
-    | x == Symbol '*' || x == Symbol '/' =
+    | x == Symbol "*" || x == Symbol "/" =
         let (rptree, nxs) = opOrder1 xs
             nptree = Tree x ptree rptree
         in  opOrder3' (nptree, nxs)
@@ -143,12 +143,12 @@ opOrder3' (ptree, x:xs)
 
 -- operations: ()
 opOrder1 :: [Token] -> (ParseTree Token, [Token])
-opOrder1 ((Symbol '(') : xs) =
+opOrder1 ((Symbol "(") : xs) =
     let (ptree, nxs) = opOrder14 xs  -- カッコで囲まれている部分のトークンをパースする
     in  case nxs of
     []                 -> error "There is no closing parenthesis."
     x:xxs
-     | x == Symbol ')' -> (ptree, xxs)
+     | x == Symbol ")" -> (ptree, xxs)
      | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
 opOrder1 ((Number x) : xs)   = (Leaf (Number x), xs)
 opOrder1 ((Variable x) : xs) = (Leaf (Variable x), xs)
@@ -167,7 +167,7 @@ genCode (Leaf x) =
      "   mov rax, [rax]",
      "   push rax"
     ]
-genCode (Tree (Symbol '=') lptree rptree) =
+genCode (Tree (Symbol "=") lptree rptree) =
     genLval lptree
     ++
     genCode rptree
@@ -189,10 +189,10 @@ genCode (Tree (Symbol x) lptree rptree) =
     ]
     ++
     case x of
-        '+' ->  ["  add rax, rdi"]
-        '-' ->  ["  sub rax, rdi"]
-        '*' ->  ["  mul rdi"]
-        '/' ->  [
+        "+" ->  ["  add rax, rdi"]
+        "-" ->  ["  sub rax, rdi"]
+        "*" ->  ["  mul rdi"]
+        "/" ->  [
                  "  mov rdx, 0",
                  "  div rdi"
                 ]
