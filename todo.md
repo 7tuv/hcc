@@ -33,12 +33,12 @@
   - [ ] logical
     - [ ] !a
     - [ ] a && b, a || b
-  - [ ] comparison
+  - [X] comparison
     - [X] a == b, a != b
-    - [ ] a < b
-    - [ ] a > b
-    - [ ] a <= b
-    - [ ] a >= b
+    - [X] a < b
+    - [X] a > b
+    - [X] a <= b
+    - [X] a >= b
   - [ ] member access
     - [ ] a[b]
     - [ ] *a

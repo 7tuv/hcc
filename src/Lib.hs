@@ -60,6 +60,14 @@ tokenizer (x:xs)
     | x == '/'  = Symbol "/" : tokenizer xs
     | x == '('  = Symbol "(" : tokenizer xs
     | x == ')'  = Symbol ")" : tokenizer xs
+    | x == '<'  =
+        let (nx:nxs) = xs
+        in case nx of '=' -> Symbol "<=" : tokenizer nxs
+                      _   -> Symbol "<"  : tokenizer xs
+    | x == '>'  =
+        let (nx:nxs) = xs
+        in case nx of '=' -> Symbol ">=" : tokenizer nxs
+                      _   -> Symbol ">"  : tokenizer xs
     | x == '='  =
         let (nx:nxs) = xs
         in case nx of '=' -> Symbol "==" : tokenizer nxs
@@ -121,15 +129,30 @@ opOrder14' (ptree, x:xs)
 -- operations: '==', '!='
 -- LEFT associative
 opOrder7 :: [Token] -> (ParseTree Token, [Token])
-opOrder7 xs = opOrder7' $ opOrder4 xs
+opOrder7 xs = opOrder7' $ opOrder6 xs
 
 opOrder7' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder7' (ptree, []) = (ptree, [])
 opOrder7' (ptree, x:xs)
     | x == Symbol "==" || x == Symbol "!=" =
-        let (rptree, nxs) = opOrder4 xs
+        let (rptree, nxs) = opOrder6 xs
             nptree = Tree x ptree rptree
         in  opOrder7' (nptree, nxs)
+    | otherwise =
+        (ptree, x:xs)
+
+-- operations: '<', '>', '<=', '>='
+-- LEFT associative
+opOrder6 :: [Token] -> (ParseTree Token, [Token])
+opOrder6 xs = opOrder6' $ opOrder4 xs
+
+opOrder6' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
+opOrder6' (ptree, []) = (ptree, [])
+opOrder6' (ptree, x:xs)
+    | x == Symbol "<" || x == Symbol ">" || x == Symbol "<=" || x == Symbol ">=" =
+        let (rptree, nxs) = opOrder4 xs
+            nptree = Tree x ptree rptree
+        in  opOrder6' (nptree, nxs)
     | otherwise =
         (ptree, x:xs)
 
@@ -195,8 +218,8 @@ genCode (Tree (Symbol "=") lptree rptree) =
     genCode rptree
     ++
     [
-     "  pop rdi",
-     "  pop rax",
+     "  pop rdi",   -- value of "genCode rptree"
+     "  pop rax",   -- value of "genCode lptree" (address)
      "  mov [rax], rdi",
      "  push rdi"
     ]
@@ -206,8 +229,8 @@ genCode (Tree (Symbol x) lptree rptree) =
     genCode rptree
     ++
     [
-     "  pop rdi",
-     "  pop rax"
+     "  pop rdi",   -- value of "genCode rptree"
+     "  pop rax"    -- value of "genCode lptree"
     ]
     ++
     case x of
@@ -228,6 +251,27 @@ genCode (Tree (Symbol x) lptree rptree) =
                  "  setne al",
                  "  movzb rax, al"
                 ]
+        "<" -> [
+                 "  cmp rax, rdi",
+                 "  sets al",
+                 "  movzb rax, al"
+                ]
+        ">=" -> [
+                 "  cmp rax, rdi",
+                 "  setns al",
+                 "  movzb rax, al"
+                ]
+        ">" -> [
+                 "  cmp rdi, rax",
+                 "  sets al",
+                 "  movzb rax, al"
+                ]
+        "<=" -> [
+                 "  cmp rdi, rax",
+                 "  setns al",
+                 "  movzb rax, al"
+                ]
+
         _    -> error $ "calcCode function failed: " ++ (show x) ++ " ."
     ++
     ["  push rax"]
