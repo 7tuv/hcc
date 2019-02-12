@@ -61,12 +61,12 @@ tokenizer (x:xs)
     | x == '('  = Symbol "(" : tokenizer xs
     | x == ')'  = Symbol ")" : tokenizer xs
     | x == '='  =
-        let (nx:nxx) = xs
-        in case nx of '=' -> Symbol "==" : tokenizer nxx
+        let (nx:nxs) = xs
+        in case nx of '=' -> Symbol "==" : tokenizer nxs
                       _   -> Symbol "="  : tokenizer xs
     | x == '!'  =
-        let (nx:nxx) = xs
-        in case nx of '=' -> Symbol "!=" : tokenizer nxx
+        let (nx:nxs) = xs
+        in case nx of '=' -> Symbol "!=" : tokenizer nxs
                       _   -> error $ "tokenizer function failed: " ++ (show x) ++ (show nx) ++ " is not unexpected."
     | x == ';'  = Symbol ";" : tokenizer xs
     | isDigit x =
