@@ -251,7 +251,7 @@ genCode (Tree (Symbol x) lptree rptree) =
                  "  setne al",
                  "  movzb rax, al"
                 ]
-        "<" -> [
+        "<"  -> [
                  "  cmp rax, rdi",
                  "  sets al",
                  "  movzb rax, al"
@@ -261,7 +261,7 @@ genCode (Tree (Symbol x) lptree rptree) =
                  "  setns al",
                  "  movzb rax, al"
                 ]
-        ">" -> [
+        ">"  -> [
                  "  cmp rdi, rax",
                  "  sets al",
                  "  movzb rax, al"
@@ -271,7 +271,6 @@ genCode (Tree (Symbol x) lptree rptree) =
                  "  setns al",
                  "  movzb rax, al"
                 ]
-
         _    -> error $ "calcCode function failed: " ++ (show x) ++ " ."
     ++
     ["  push rax"]
