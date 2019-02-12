@@ -34,7 +34,7 @@
     - [ ] !a
     - [ ] a && b, a || b
   - [ ] comparison
-    - [ ] a == b, a != b
+    - [X] a == b, a != b
     - [ ] a < b
     - [ ] a > b
     - [ ] a <= b

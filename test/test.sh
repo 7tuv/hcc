@@ -55,4 +55,11 @@ try 15 "a=5;b=a+5;a+b;"
 try 27 "a=b=c=e=d=9;f=a+b+c*2+d+e;f/2;"
 try 25 "z=(y=5)*4;y+z;"
 
+# ==, !=
+try 1 "a=10;b=10;c=(a==b);"
+try 0 "a=10;b=10;c=(a!=b);"
+try 0 "a=10;b=20;c=(a==b);"
+try 1 "a=10;b=20;c=(a!=b);"
+try 3 "a=10;c=b=20;e=(a==b)+(b==c)+(c==a)+(a!=b)+(b!=c)+(c!=a);"
+
 echo "*** OK ***"

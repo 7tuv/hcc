@@ -60,13 +60,20 @@ tokenizer (x:xs)
     | x == '/'  = Symbol "/" : tokenizer xs
     | x == '('  = Symbol "(" : tokenizer xs
     | x == ')'  = Symbol ")" : tokenizer xs
-    | x == '='  = Symbol "=" : tokenizer xs
+    | x == '='  =
+        let (nx:nxx) = xs
+        in case nx of '=' -> Symbol "==" : tokenizer nxx
+                      _   -> Symbol "="  : tokenizer xs
+    | x == '!'  =
+        let (nx:nxx) = xs
+        in case nx of '=' -> Symbol "!=" : tokenizer nxx
+                      _   -> error $ "tokenizer function failed: " ++ (show x) ++ (show nx) ++ " is not unexpected."
     | x == ';'  = Symbol ";" : tokenizer xs
     | isDigit x =
         let len = numLength (x:xs)
         in Number (take len $ x:xs) : (tokenizer . drop len $ x:xs)
     | isLower x = Variable x : tokenizer xs
-    | otherwise   = error "tokenizer function failed"
+    | otherwise   = error $ "tokenizer function failed: " ++ (show x) ++ " is not unexpected."
 
 -- 与えられた文字列の先頭に含まれる整数の長さを返す
 -- numLength "250" -> 3
@@ -99,15 +106,30 @@ stmt xs =
 -- operations: '='
 -- RIGHT associative
 opOrder14 :: [Token] -> (ParseTree Token, [Token])
-opOrder14 xs = opOrder14' $ opOrder4 xs
+opOrder14 xs = opOrder14' $ opOrder7 xs
 
 opOrder14' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
 opOrder14' (ptree, []) = (ptree, [])
 opOrder14' (ptree, x:xs)
     | x == Symbol "=" =
-        let (nptree, nxs) = opOrder4 xs
+        let (nptree, nxs) = opOrder7 xs
             (rptree, nnxs) = opOrder14' (nptree, nxs)
         in (Tree x ptree rptree, nnxs)
+    | otherwise =
+        (ptree, x:xs)
+
+-- operations: '==', '!='
+-- LEFT associative
+opOrder7 :: [Token] -> (ParseTree Token, [Token])
+opOrder7 xs = opOrder7' $ opOrder4 xs
+
+opOrder7' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
+opOrder7' (ptree, []) = (ptree, [])
+opOrder7' (ptree, x:xs)
+    | x == Symbol "==" || x == Symbol "!=" =
+        let (rptree, nxs) = opOrder4 xs
+            nptree = Tree x ptree rptree
+        in  opOrder7' (nptree, nxs)
     | otherwise =
         (ptree, x:xs)
 
@@ -163,9 +185,9 @@ genCode (Leaf x) =
     genLval (Leaf x)
     ++
     [
-     "   pop rax",
-     "   mov rax, [rax]",
-     "   push rax"
+     "  pop rax",
+     "  mov rax, [rax]",
+     "  push rax"
     ]
 genCode (Tree (Symbol "=") lptree rptree) =
     genLval lptree
@@ -189,14 +211,24 @@ genCode (Tree (Symbol x) lptree rptree) =
     ]
     ++
     case x of
-        "+" ->  ["  add rax, rdi"]
-        "-" ->  ["  sub rax, rdi"]
-        "*" ->  ["  mul rdi"]
-        "/" ->  [
+        "+"  -> ["  add rax, rdi"]
+        "-"  -> ["  sub rax, rdi"]
+        "*"  -> ["  mul rdi"]
+        "/"  -> [
                  "  mov rdx, 0",
                  "  div rdi"
                 ]
-        _   -> error $ "calcCode function failed: expected -> \"+-*/\", but actual -> " ++ (show x) ++ " ."
+        "==" -> [
+                 "  cmp rax, rdi",
+                 "  sete al",
+                 "  movzb rax, al"
+                ]
+        "!=" -> [
+                 "  cmp rax, rdi",
+                 "  setne al",
+                 "  movzb rax, al"
+                ]
+        _    -> error $ "calcCode function failed: " ++ (show x) ++ " ."
     ++
     ["  push rax"]
 genCode Empty = error "calcCode function failed."
