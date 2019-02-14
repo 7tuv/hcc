@@ -54,6 +54,7 @@ epilogue =
 tokenizer :: String -> [Token]
 tokenizer ""        = []
 tokenizer (x:xs)
+    | x == ' '  = tokenizer xs
     | x == '+'  = Symbol "+" : tokenizer xs
     | x == '-'  = Symbol "-" : tokenizer xs
     | x == '*'  = Symbol "*" : tokenizer xs
