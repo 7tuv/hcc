@@ -4,9 +4,11 @@ module Lib
 
 import Data.List (elemIndex)
 import Data.Char (isDigit, isLower, ord)
+import qualified Data.Map as Map
 
 data ParseTree a = Empty | Leaf a | Tree a (ParseTree a) (ParseTree a) deriving (Show, Eq)
-data Token = Number String | Symbol String | Variable Char deriving (Show, Eq)
+data Token = Number String | Symbol String | Variable String deriving (Show, Eq)
+type VariableScope = Map.Map String Int
 
 genAssemblyCode :: String -> [String]
 genAssemblyCode text =
@@ -21,24 +23,30 @@ assemblyCodeHead =
 
 assemblyCodeBody :: String -> [String]
 assemblyCodeBody text =
+    let (ptrees, vs) = parser $ tokenizer text
+    in
     [
      "main:"
     ]
     ++
-    prologue
+    prologue vs
     ++
-    (concat $ map genCode $ parser $ tokenizer text)
+    (concat $ map (\x -> genCode x vs) ptrees)
     ++
     ["  pop rax"]
     ++
     epilogue
 
-prologue :: [String]
-prologue =
+prologue :: VariableScope -> [String]
+prologue vs =
+    let xs = Map.elems vs
+        offset = case xs of [] -> 0
+                            _  -> foldl1 max xs
+    in
     [
      "  push rbp",
      "  mov rbp, rsp",
-     "  sub rsp, " ++ (show $ 8 * 26)
+     "  sub rsp, " ++ show offset
     ]
 
 epilogue :: [String]
@@ -79,144 +87,153 @@ tokenizer (x:xs)
                       _   -> error $ "tokenizer function failed: " ++ (show x) ++ (show nx) ++ " is not unexpected."
     | x == ';'  = Symbol ";" : tokenizer xs
     | isDigit x =
-        let len = numLength (x:xs)
+        let len = charLength isDigit (x:xs)
         in Number (take len $ x:xs) : (tokenizer . drop len $ x:xs)
-    | isLower x = Variable x : tokenizer xs
+    | isLower x =
+        let len = charLength isLower (x:xs)
+        in Variable (take len $ x:xs) : (tokenizer . drop len $ x:xs)
     | otherwise   = error $ "tokenizer function failed: " ++ (show x) ++ " is not unexpected."
 
--- 与えられた文字列の先頭に含まれる整数の長さを返す
--- numLength "250" -> 3
--- numLength "40zxc" -> 2
--- numLength "abc234" -> 0
--- numLength "q1w2e3r" -> 0
-numLength :: String -> Int
-numLength "" = 0
-numLength (x:xs)
-    | isDigit x = 1 + numLength xs
+-- 与えられた文字列の先頭から、連続して関数fを満たす文字の個数を返す
+-- charLength isDigit "250zzz" -> 3
+-- charLength isDigit "qw12er3" -> 0
+-- charLength isLower "250zzz" -> 0
+-- charLength isLower "qw12er3" -> 2
+charLength :: (Char -> Bool) -> String -> Int
+charLength f "" = 0
+charLength f (x:xs)
+    | f x = 1 + charLength f xs
     | otherwise = 0
 
 
 ---- パーサ ----
-parser :: [Token] -> [ParseTree Token]
-parser xs = stmt xs
+parser :: [Token] -> ([ParseTree Token], VariableScope)
+parser xs = stmt xs Map.empty
 
 -- ParseTree: パースが完了した分の構文解析木
 -- [Token]: これからパースする残りのトークン
-stmt :: [Token] -> [ParseTree Token]
-stmt [] = []
-stmt xs =
-    let (ptree, nxs) = opOrder14 xs
+stmt :: [Token] -> VariableScope -> ([ParseTree Token], VariableScope)
+stmt [] vs = ([], vs)
+stmt xs vs =
+    let (ptree, nxs, nvs) = opOrder14 xs vs
     in  case nxs of
         [] -> error "';' was not found at the end of a sentence."
         (x:_)
-            | x == Symbol ";" -> ptree : (stmt $ tail nxs)
+            | x == Symbol ";" -> let (nptree, nnvs) = stmt (tail nxs) nvs
+                                 in  (ptree : nptree, nnvs)
             | otherwise       -> error "stmt function failed."
 
 -- operations: '='
 -- RIGHT associative
-opOrder14 :: [Token] -> (ParseTree Token, [Token])
-opOrder14 xs = opOrder14' $ opOrder7 xs
+opOrder14 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder14 xs vs = opOrder14' $ opOrder7 xs vs
 
-opOrder14' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder14' (ptree, []) = (ptree, [])
-opOrder14' (ptree, x:xs)
+opOrder14' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder14' (ptree, [], vs) = (ptree, [], vs)
+opOrder14' (ptree, x:xs, vs)
     | x == Symbol "=" =
-        let (nptree, nxs) = opOrder7 xs
-            (rptree, nnxs) = opOrder14' (nptree, nxs)
-        in (Tree x ptree rptree, nnxs)
+        let (nptree, nxs, nvs) = opOrder7 xs vs
+            (rptree, nnxs, nnvs) = opOrder14' (nptree, nxs, nvs)
+        in (Tree x ptree rptree, nnxs, nnvs)
     | otherwise =
-        (ptree, x:xs)
+        (ptree, x:xs, vs)
 
 -- operations: '==', '!='
 -- LEFT associative
-opOrder7 :: [Token] -> (ParseTree Token, [Token])
-opOrder7 xs = opOrder7' $ opOrder6 xs
+opOrder7 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder7 xs vs = opOrder7' $ opOrder6 xs vs
 
-opOrder7' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder7' (ptree, []) = (ptree, [])
-opOrder7' (ptree, x:xs)
+opOrder7' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder7' (ptree, [], vs) = (ptree, [], vs)
+opOrder7' (ptree, x:xs, vs)
     | x == Symbol "==" || x == Symbol "!=" =
-        let (rptree, nxs) = opOrder6 xs
+        let (rptree, nxs, nvs) = opOrder6 xs vs
             nptree = Tree x ptree rptree
-        in  opOrder7' (nptree, nxs)
+        in  opOrder7' (nptree, nxs, nvs)
     | otherwise =
-        (ptree, x:xs)
+        (ptree, x:xs, vs)
 
 -- operations: '<', '>', '<=', '>='
 -- LEFT associative
-opOrder6 :: [Token] -> (ParseTree Token, [Token])
-opOrder6 xs = opOrder6' $ opOrder4 xs
+opOrder6 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder6 xs vs = opOrder6' $ opOrder4 xs vs
 
-opOrder6' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder6' (ptree, []) = (ptree, [])
-opOrder6' (ptree, x:xs)
+opOrder6' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder6' (ptree, [], vs) = (ptree, [], vs)
+opOrder6' (ptree, x:xs, vs)
     | x == Symbol "<" || x == Symbol ">" || x == Symbol "<=" || x == Symbol ">=" =
-        let (rptree, nxs) = opOrder4 xs
+        let (rptree, nxs, nvs) = opOrder4 xs vs
             nptree = Tree x ptree rptree
-        in  opOrder6' (nptree, nxs)
+        in  opOrder6' (nptree, nxs, nvs)
     | otherwise =
-        (ptree, x:xs)
+        (ptree, x:xs, vs)
 
 -- operations: '+', '-'
 -- LEFT associative
-opOrder4 :: [Token] -> (ParseTree Token, [Token])
-opOrder4 xs = opOrder4' $ opOrder3 xs
+opOrder4 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder4 xs vs = opOrder4' $ opOrder3 xs vs
 
-opOrder4' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder4' (ptree, []) = (ptree, [])
-opOrder4' (ptree, x:xs)
+opOrder4' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder4' (ptree, [], vs) = (ptree, [], vs)
+opOrder4' (ptree, x:xs, vs)
     | x == Symbol "+" || x == Symbol "-" =
-        let (rptree, nxs) = opOrder3 xs
+        let (rptree, nxs, nvs) = opOrder3 xs vs
             nptree = Tree x ptree rptree
-        in  opOrder4' (nptree, nxs)
+        in  opOrder4' (nptree, nxs, nvs)
     | otherwise =
-        (ptree, x:xs)
+        (ptree, x:xs, vs)
 
 -- operations: '*', '/'
 -- LEFT associative
-opOrder3 :: [Token] -> (ParseTree Token, [Token])
-opOrder3 xs = opOrder3' $ opOrder1 xs
+opOrder3 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder3 xs vs = opOrder3' $ opOrder1 xs vs
 
-opOrder3' :: (ParseTree Token, [Token]) -> (ParseTree Token, [Token])
-opOrder3' (ptree, []) = (ptree, [])
-opOrder3' (ptree, x:xs)
+opOrder3' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder3' (ptree, [], vs) = (ptree, [], vs)
+opOrder3' (ptree, x:xs, vs)
     | x == Symbol "*" || x == Symbol "/" =
-        let (rptree, nxs) = opOrder1 xs
+        let (rptree, nxs, nvs) = opOrder1 xs vs
             nptree = Tree x ptree rptree
-        in  opOrder3' (nptree, nxs)
+        in  opOrder3' (nptree, nxs, nvs)
     | otherwise =
-        (ptree, x:xs)
+        (ptree, x:xs, vs)
 
 -- operations: ()
-opOrder1 :: [Token] -> (ParseTree Token, [Token])
-opOrder1 ((Symbol "(") : xs) =
-    let (ptree, nxs) = opOrder14 xs  -- カッコで囲まれている部分のトークンをパースする
+opOrder1 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder1 ((Symbol "(") : xs) vs =
+    let (ptree, nxs, nvs) = opOrder14 xs vs  -- カッコで囲まれている部分のトークンをパースする
     in  case nxs of
-    []                 -> error "There is no closing parenthesis."
-    x:xxs
-     | x == Symbol ")" -> (ptree, xxs)
-     | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
-opOrder1 ((Number x) : xs)   = (Leaf (Number x), xs)
-opOrder1 ((Variable x) : xs) = (Leaf (Variable x), xs)
-opOrder1 x = error "opOrder function failed."
+            []                 -> error "There is no closing parenthesis."
+            x:xxs
+             | x == Symbol ")" -> (ptree, xxs, nvs)
+             | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
+opOrder1 ((Number x) : xs) vs   = (Leaf (Number x), xs, vs)
+opOrder1 ((Variable x) : xs) vs = let size = case Map.elems vs of
+                                                 [] -> 0
+                                                 xs -> foldl1 max xs
+                                      nvs  = case Map.member x vs of
+                                                 True  -> vs
+                                                 False -> Map.insert x (size+8) vs
+                                  in  (Leaf (Variable x), xs, nvs)
+opOrder1 x vs = error "opOrder function failed."
 
 
 ---- コード生成 ----
 -- 構文木からアセンブリコードを生成する
-genCode :: ParseTree Token -> [String]
-genCode (Leaf (Number x)) = ["  push " ++ x]
-genCode (Leaf x) =
-    genLval (Leaf x)
+genCode :: ParseTree Token -> VariableScope -> [String]
+genCode (Leaf (Number x)) _ = ["  push " ++ x]
+genCode (Leaf (Variable x)) vs =
+    genLval (Leaf (Variable x)) vs
     ++
     [
      "  pop rax",
      "  mov rax, [rax]",
      "  push rax"
     ]
-genCode (Tree (Symbol "=") lptree rptree) =
-    genLval lptree
+genCode (Tree (Symbol "=") lptree rptree) vs =
+    genLval lptree vs
     ++
-    genCode rptree
+    genCode rptree vs
     ++
     [
      "  pop rdi",   -- value of "genCode rptree"
@@ -224,10 +241,10 @@ genCode (Tree (Symbol "=") lptree rptree) =
      "  mov [rax], rdi",
      "  push rdi"
     ]
-genCode (Tree (Symbol x) lptree rptree) =
-    genCode lptree
+genCode (Tree (Symbol x) lptree rptree) vs =
+    genCode lptree vs
     ++
-    genCode rptree
+    genCode rptree vs
     ++
     [
      "  pop rdi",   -- value of "genCode rptree"
@@ -275,16 +292,17 @@ genCode (Tree (Symbol x) lptree rptree) =
         _    -> error $ "calcCode function failed: " ++ (show x) ++ " ."
     ++
     ["  push rax"]
-genCode Empty = error "calcCode function failed."
+genCode Empty vs = error "calcCode function failed."
 
 --  左辺値のアドレスを push する
-genLval :: ParseTree Token -> [String]
-genLval (Leaf (Variable x)) =
-    let offset = (ord x - ord 'a' + 1) * 8
+genLval :: ParseTree Token -> VariableScope -> [String]
+genLval (Leaf (Variable x)) vs =
+    -- let offset = (ord x - ord 'a' + 1) * 8
+    let offset = vs Map.! x
     in
     [
      "  mov rax, rbp",
      "  sub rax, " ++ show offset ,
      "  push rax"
     ]
-genLval _ = error "genLval function failed."
+genLval _ vs = error "genLval function failed."

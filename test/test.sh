@@ -53,7 +53,8 @@ try 70 "(1+2*(2+6)+(8+2)+(5+(8-(1+((1+(1+1))+1)+(1+((1-(9/3)+(6+(1+(5+1))-1)/(1+
 try 6 "a=3; a*2;"
 try 15 "a=5; b=a+5; a+b;"
 try 27 "a=b=c=e=d=9; f=a+b+c*2+d+e; f/2;"
-try 25 "z=(y=5)*4; y+z;"
+try 25 "zz=(yy=5)*4; yy + zz;"
+try 1 "foo=1; bar=3; hoge=6; huga=5; foo= 2 * huga; bar = (foo * huga) - hoge * bar * 2; bar == 14;"
 
 # ==, !=
 try 1 "a=10; b=10; c=(a==b);"
