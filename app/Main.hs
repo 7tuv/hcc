@@ -1,7 +1,7 @@
 module Main where
 
 import System.Environment (getArgs)
-import Lib
+import GenCode
 
 main :: IO ()
 main = do
