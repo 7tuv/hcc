@@ -9,18 +9,34 @@ import DataType
 parser :: [Token] -> ([ParseTree Token], VariableScope)
 parser xs = stmt xs Map.empty
 
--- ParseTree: パースが完了した分の構文解析木
--- [Token]: これからパースする残りのトークン
+-- ParseTree     : パースが完了した分の構文解析木
+-- [Token]       : これからパースする残りのトークン
+-- VariableScope : パースが完了した分までで使用されている変数の一覧
 stmt :: [Token] -> VariableScope -> ([ParseTree Token], VariableScope)
 stmt [] vs = ([], vs)
 stmt xs vs =
-    let (ptree, nxs, nvs) = opOrder14 xs vs
+    let (ptree, nxs, nvs) = opOrder15 xs vs
     in  case nxs of
         [] -> error "';' was not found at the end of a sentence."
         (x:_)
             | x == Symbol ";" -> let (nptree, nnvs) = stmt (tail nxs) nvs
                                  in  (ptree : nptree, nnvs)
             | otherwise       -> error "stmt function failed."
+
+-- operations: ','
+-- LEFT associative
+opOrder15 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder15 xs vs = opOrder15' $ opOrder14 xs vs
+
+opOrder15' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder15' (ptree, [], vs) = (ptree, [], vs)
+opOrder15' (ptree, x:xs, vs)
+    | x == Symbol "," =
+        let (rptree, nxs, nvs) = opOrder14 xs vs
+            nptree = Tree x ptree rptree
+        in  opOrder15' (nptree, nxs, nvs)
+    | otherwise =
+        (ptree, x:xs, vs)
 
 -- operations: '='
 -- RIGHT associative
@@ -100,18 +116,29 @@ opOrder3' (ptree, x:xs, vs)
 -- operations: ()
 opOrder1 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
 opOrder1 ((Symbol "(") : xs) vs =
-    let (ptree, nxs, nvs) = opOrder14 xs vs  -- カッコで囲まれている部分のトークンをパースする
+    let (ptree, nxs, nvs) = opOrder15 xs vs  -- カッコで囲まれている部分のトークンをパースする
     in  case nxs of
             []                 -> error "There is no closing parenthesis."
             x:xxs
              | x == Symbol ")" -> (ptree, xxs, nvs)
              | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
 opOrder1 ((Number x) : xs) vs   = (Leaf (Number x), xs, vs)
-opOrder1 ((Variable x) : xs) vs = let size = case Map.elems vs of
-                                                 [] -> 0
-                                                 xs -> foldl1 max xs
-                                      nvs  = case Map.member x vs of
-                                                 True  -> vs
-                                                 False -> Map.insert x (size+8) vs
-                                  in  (Leaf (Variable x), xs, nvs)
+opOrder1 ((Variable x) : xs) vs =
+    case xs of
+        Symbol "(" : xxs   -- function
+            -> case head xxs of
+                   Symbol ")" -> let nptree = Tree Function (Leaf (Variable x)) Empty  -- No arguments
+                                 in  (nptree, tail xxs, vs)
+                   _          -> let (ptree, nxs, nvs) = opOrder1 xs vs                -- More than one argument
+                                     nptree = Tree Function (Leaf (Variable x)) ptree
+                                 in  (nptree, nxs, nvs)
+        _   -> let size =  -- variable
+                       case Map.elems vs of
+                           [] -> 0
+                           ys -> foldl1 max ys
+                   nvs  =
+                       case Map.member x vs of
+                           True  -> vs
+                           False -> Map.insert x (size + 8) vs
+               in  (Leaf (Variable x), xs, nvs)
 opOrder1 x vs = error "opOrder function failed."

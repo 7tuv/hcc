@@ -19,6 +19,25 @@ try() {
   fi
 }
 
+tryFuncCall() {
+  expected="$1"
+  input="$2"
+  funcdef="$3"
+
+  stack exec hcc-exe "$input" > tmp.s
+  echo "$funcdef" > foo.c
+  gcc -o a.out tmp.s foo.c
+  ./a.out
+  actual="$?"
+
+  if [ "$actual" = "$expected" ]; then
+    echo "$input => $actual"
+  else
+    echo "$expected expecd, but got $actual"
+    exit 1
+  fi
+}
+
 # number
 try 0 "0;"
 try 36 "36;"
@@ -76,5 +95,16 @@ try 1 "a=15; b=20; c=(a<=b);"
 try 1 "a=15; b=10; c=(a>=b);"
 try 1 "a=15; b=15; c=(a>=b);"
 try 0 "a=15; b=20; c=(a>=b);"
+
+#function
+tryFuncCall 1 "a = foo(); a==42;" "int foo(){return 42;}"
+tryFuncCall 1 "a = foo(1); a==1;" "int foo(int a){return a;}"
+tryFuncCall 1 "a = foo(1, 2); a==3;" "int foo(int a, int b){return a+b;}"
+tryFuncCall 1 "a = foo(1, 2, 3); a==6;" "int foo(int a, int b, int c){return a+b+c;}"
+tryFuncCall 1 "a = foo(1, 2, 3, 4); a==10;" "int foo(int a, int b, int c, int d){return a+b+c+d;}"
+tryFuncCall 1 "a = foo(1, 2, 3, 4, 5); a==15;" "int foo(int a, int b, int c, int d, int e){return a+b+c+d+e;}"
+tryFuncCall 1 "a = foo(1, 2, 3, 4, 5, 6); a==21;" "int foo(int a, int b, int c, int d, int e, int f){return a+b+c+d+e+f;}"
+tryFuncCall 1 "a = foo(1, 2, 3, 4, 5, 6, 7); a==28;" "int foo(int a, int b, int c, int d, int e, int f, int g){return a+b+c+d+e+f+g;}"
+tryFuncCall 1 "a = foo(1, 2, 3, 4, 5, 6, 7, 8); a==36;" "int foo(int a, int b, int c, int d, int e, int f, int g, int h){return a+b+c+d+e+f+g+h;}"
 
 echo "*** OK ***"

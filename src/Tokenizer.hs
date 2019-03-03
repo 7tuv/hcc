@@ -32,6 +32,7 @@ tokenizer (x:xs)
         let (nx:nxs) = xs
         in case nx of '=' -> Symbol "!=" : tokenizer nxs
                       _   -> error $ "tokenizer function failed: " ++ (show x) ++ (show nx) ++ " is not unexpected."
+    | x == ','  = Symbol "," : tokenizer xs
     | x == ';'  = Symbol ";" : tokenizer xs
     | isDigit x =
         let len = charLength isDigit (x:xs)
