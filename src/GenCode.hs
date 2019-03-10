@@ -159,8 +159,9 @@ genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
                            Empty -> ([], 0)                  -- No arguments
                            _     -> genCode rptree vs cnt1_  -- More than one argument
                            where cnt1_ = case cnt1 `mod` 2 == 0 of  -- 引数をpushする前にアラインメントを調整する必要がある。
-                                             True  -> cnt1          -- そのため、ここではアラインメントがなされたものとして引数を評価する。
-                                             False -> cnt1 + 1
+                                             True  -> cnt1          -- （引数が7以上ある場合、calleeが自分のrbpを基準にしてcallerのframe内の値にアクセスするため、
+                                             False -> cnt1 + 1      -- calleeとcallerのframe間にpaddingを挟めない）
+                                                                    -- そのためここではアラインメントがなされたものとして、引数を評価するためのアセンブリコードを出力する。
         nargOnStack = max 0 (cnt2 - 6)
         fAligned = (cnt1 + nargOnStack) `mod` 2 == 0
         ncode = case fAligned of
