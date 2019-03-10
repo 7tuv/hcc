@@ -62,6 +62,7 @@
   - [ ] goto
   - [ ] return
 - [ ] Function
+  - [X] function call
   - [ ] main function
   - [ ] Function declaration
   - [ ] Function definition

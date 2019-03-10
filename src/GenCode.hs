@@ -32,9 +32,7 @@ assemblyCodeBody text =
     ++
     prologue vs
     ++
-    (concat $ map (\x -> fst $ genCode x vs) ptrees)
-    ++
-    ["  pop rax"]
+    (concat $ map (\x -> x ++ ["  pop rax"]) $ map (\x -> fst $ genCode x vs 0) ptrees)
     ++
     epilogue
 
@@ -47,7 +45,8 @@ prologue vs =
     [
      "  push rbp",
      "  mov rbp, rsp",
-     "  sub rsp, " ++ show offset
+     "  sub rsp, " ++ show offset,
+     "  and rsp, 0xfffffffffffffff0"    -- 16-byte alignment of the stack
     ]
 
 epilogue :: [String]
@@ -59,13 +58,20 @@ epilogue =
     ]
 
 
+-- <Input>
+-- ParseTree Token: 生成対象の構文木
+-- VariableScope: 使用されている変数のリスト
+-- PushCount: 関数が呼ばれた時点で積まれているスタックの総数
+-- <Output>
+-- [String]: 生成したアセンブリコード
+-- PushCount: 関数内で積んだスタックの総数
 
 ---- コード生成 ----
 -- 構文木からアセンブリコードを生成する
-genCode :: ParseTree Token -> VariableScope -> ([String], PushCount)
-genCode (Leaf (Number x)) _ = (["  push " ++ x], 1)
-genCode (Leaf (Variable x)) vs =
-    let (code, cnt) = genLval (Leaf (Variable x)) vs
+genCode :: ParseTree Token -> VariableScope -> PushCount -> ([String], PushCount)
+genCode (Leaf (Number x)) _ _ = (["  push " ++ x], 1)
+genCode (Leaf (Variable x)) vs cnt1 =
+    let (code, cnt2) = genLval (Leaf (Variable x)) vs cnt1
         ncode =
             code
             ++
@@ -74,10 +80,10 @@ genCode (Leaf (Variable x)) vs =
              "  mov rax, [rax]",
              "  push rax"
             ]
-    in (ncode, cnt)
-genCode (Tree (Symbol "=") lptree rptree) vs =
-    let (code1, cnt1) = genLval lptree vs
-        (code2, cnt2) = genCode rptree vs
+    in (ncode, cnt2)
+genCode (Tree (Symbol "=") lptree rptree) vs cnt1 =
+    let (code1, cnt21) = genLval lptree vs cnt1
+        (code2, cnt22) = genCode rptree vs (cnt1 + cnt21)
         ncode = code1
                 ++
                 code2
@@ -88,14 +94,14 @@ genCode (Tree (Symbol "=") lptree rptree) vs =
                  "  mov [rax], rdi",
                  "  push rdi"
                 ]
-    in  (ncode, cnt1 + cnt2 - 1)
-genCode (Tree (Symbol ",") lptree rptree) vs =
-    let (code1, cnt1) = genCode rptree vs  -- push from a last argument
-        (code2, cnt2) = genCode lptree vs
-    in  (code1 ++ code2, cnt1 + cnt2)
-genCode (Tree (Symbol x) lptree rptree) vs =
-    let (code1, cnt1) = genCode lptree vs
-        (code2, cnt2) = genCode rptree vs
+    in  (ncode, cnt21 + cnt22 - 1)
+genCode (Tree (Symbol ",") lptree rptree) vs cnt1 =
+    let (code1, cnt21) = genCode rptree vs cnt1  -- push from a last argument
+        (code2, cnt22) = genCode lptree vs (cnt1 + cnt21)
+    in  (code1 ++ code2, cnt21 + cnt22)
+genCode (Tree (Symbol x) lptree rptree) vs cnt1 =
+    let (code1, cnt21) = genCode lptree vs cnt1
+        (code2, cnt22) = genCode rptree vs (cnt1 + cnt21)
         ncode = code1
                 ++
                 code2
@@ -146,29 +152,42 @@ genCode (Tree (Symbol x) lptree rptree) vs =
                     _    -> error $ "calcCode function failed: " ++ (show x) ++ " ."
                 ++
                 ["  push rax"]
-    in  (ncode, cnt1 + cnt2 - 1)
-genCode (Tree Function (Leaf (Variable x)) rptree) vs =
+    in  (ncode, cnt21 + cnt22 - 1)
+genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
     let registers = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-        (code, cnt) = case rptree of
-                          Empty -> ([], 0)            -- No arguments
-                          _     -> genCode rptree vs  -- More than one argument
-        ncode = code
+        (code, cnt2) = case rptree of
+                           Empty -> ([], 0)                  -- No arguments
+                           _     -> genCode rptree vs cnt1_  -- More than one argument
+                           where cnt1_ = case cnt1 `mod` 2 == 0 of  -- 引数をpushする前にアラインメントを調整する必要がある。
+                                             True  -> cnt1          -- そのため、ここではアラインメントがなされたものとして引数を評価する。
+                                             False -> cnt1 + 1
+        nargOnStack = max 0 (cnt2 - 6)
+        fAligned = (cnt1 + nargOnStack) `mod` 2 == 0
+        ncode = case fAligned of
+                    True  -> []
+                    False -> ["  sub rsp, 8"]
                 ++
-                (concat $ take (min cnt 6) $ map (\reg -> ["  pop rax", "  mov " ++ reg ++ ", rax"]) registers)
+                code
+                ++
+                (concat $ take (min cnt2 6) $ map (\reg -> ["  pop " ++ reg]) registers)
                 ++
                 ["  call " ++ x]
                 ++
-                case cnt <= 6 of
+                case nargOnStack <= 0 of
                     True  -> []
-                    False -> ["  add rsp, 0x" ++ showHex ((cnt - 6) * 8) ""]    -- 第7引数以降は使わないので無視するため
+                    False -> ["  add rsp, 0x" ++ showHex (nargOnStack * 8) ""]    -- 関数呼び出し後はスタック上にある第7引数以降を破棄する
+                ++
+                case fAligned of
+                    True  -> []
+                    False -> ["  add rsp, 8"]
                 ++
                 ["  push rax"]
     in  (ncode, 1)
-genCode Empty vs = error "calcCode function failed."
+genCode Empty _ _ = error "calcCode function failed."
 
 --  左辺値のアドレスを push する
-genLval :: ParseTree Token -> VariableScope -> ([String], PushCount)
-genLval (Leaf (Variable x)) vs =
+genLval :: ParseTree Token -> VariableScope -> PushCount -> ([String], PushCount)
+genLval (Leaf (Variable x)) vs _ =
     -- let offset = (ord x - ord 'a' + 1) * 8
     let offset = vs Map.! x
         code =
@@ -178,4 +197,4 @@ genLval (Leaf (Variable x)) vs =
              "  push rax"
             ]
     in (code, 1)
-genLval _ vs = error "genLval function failed."
+genLval _ _ _ = error "genLval function failed."
