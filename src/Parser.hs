@@ -21,7 +21,7 @@ stmt xs vs =
         (x:_)
             | x == Symbol ";" -> let (nptree, nnvs) = stmt (tail nxs) nvs
                                  in  (ptree : nptree, nnvs)
-            | otherwise       -> error "stmt function failed."
+            | otherwise       -> error $ "stmt function failed: " ++ (show x) ++ " ."
 
 -- operations: ','
 -- LEFT associative
@@ -197,11 +197,16 @@ opOrder1 ((Variable x) : xs) vs =
     case xs of
         Symbol "(" : xxs   -- function
             -> case head xxs of
-                   Symbol ")" -> let nptree = Tree Function (Leaf (Variable x)) Empty  -- No arguments
-                                 in  (nptree, tail xxs, vs)
-                   _          -> let (ptree, nxs, nvs) = opOrder1 xs vs                -- More than one argument
-                                     nptree = Tree Function (Leaf (Variable x)) ptree
-                                 in  (nptree, nxs, nvs)
+                   Symbol ")"
+                       -> let nptree = Tree Function (Leaf (Variable x)) Empty  -- No arguments
+                          in  (nptree, tail xxs, vs)
+                   _   -> let (ptree, nxs, nvs) = separator xxs vs             -- More than one argument
+                              nptree = Tree Function (Leaf (Variable x)) ptree
+                          in  case nxs of
+                              []                 -> error "There is no closing parenthesis."
+                              x:xxs
+                               | x == Symbol ")" -> (nptree, xxs, nvs)
+                               | otherwise       -> error $ "opOrder function failed: expected -> ')' , but actual -> " ++ (show x) ++ " ."
         _   -> let size =  -- variable
                        case Map.elems vs of
                            [] -> 0
@@ -212,3 +217,17 @@ opOrder1 ((Variable x) : xs) vs =
                            False -> Map.insert x (size + 8) vs
                in  (Leaf (Variable x), xs, nvs)
 opOrder1 x vs = error "opOrder function failed."
+
+
+separator :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+separator xs vs = separator' $ opOrder14 xs vs
+
+separator' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+separator' (ptree, [], vs) = (Tree (Symbol ",") ptree Empty, [], vs)
+separator' (ptree, x:xs, vs)
+    | x == Symbol "," =
+        let (nptree, nxs, nvs) = opOrder14 xs vs
+            (rptree, nnxs, nnvs) = separator' (nptree, nxs, nvs)
+        in (Tree x ptree rptree, nnxs, nnvs)
+    | otherwise =
+        (Tree (Symbol ",") ptree Empty, x:xs, vs)

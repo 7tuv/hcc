@@ -155,13 +155,10 @@ genCode (Tree (Symbol x) lptree rptree) vs cnt1 =
     in  (ncode, cnt21 + cnt22 - 1)
 genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
     let registers = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-        (code, cnt2) = case rptree of
-                           Empty -> ([], 0)                  -- No arguments
-                           _     -> genCode rptree vs cnt1_  -- More than one argument
-                           where cnt1_ = case cnt1 `mod` 2 == 0 of  -- 引数をpushする前にアラインメントを調整する必要がある。
-                                             True  -> cnt1          -- （引数が7以上ある場合、calleeが自分のrbpを基準にしてcallerのframe内の値にアクセスするため、
-                                             False -> cnt1 + 1      -- calleeとcallerのframe間にpaddingを挟めない）
-                                                                    -- そのためここではアラインメントがなされたものとして、引数を評価するためのアセンブリコードを出力する。
+        (code, cnt2) = genCode rptree vs cnt1_
+                       where cnt1_ = case cnt1 `mod` 2 == 0 of  -- 引数を評価してpushする前に "cnt1_" でアラインメントを調整する。
+                                         True  -> cnt1          -- （引数が7以上ある場合、calleeが自分のrbpを基準にしてcallerのframe内の値にアクセスするため、
+                                         False -> cnt1 + 1      -- calleeとcallerのframe間にpaddingを挟めない。事前にアラインメントの調整が必要。）
         nargOnStack = max 0 (cnt2 - 6)
         fAligned = (cnt1 + nargOnStack) `mod` 2 == 0
         ncode = case fAligned of
@@ -184,7 +181,8 @@ genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
                 ++
                 ["  push rax"]
     in  (ncode, 1)
-genCode Empty _ _ = error "calcCode function failed."
+genCode Empty vs cnt = ([], 0)
+genCode _ _ _ = error "calcCode function failed."
 
 --  左辺値のアドレスを push する
 genLval :: ParseTree Token -> VariableScope -> PushCount -> ([String], PushCount)
