@@ -38,20 +38,70 @@ opOrder15' (ptree, x:xs, vs)
     | otherwise =
         (ptree, x:xs, vs)
 
+
 -- operations: '='
 -- RIGHT associative
 opOrder14 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
-opOrder14 xs vs = opOrder14' $ opOrder7 xs vs
+opOrder14 xs vs = opOrder14' $ opOrder13 xs vs
 
 opOrder14' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
 opOrder14' (ptree, [], vs) = (ptree, [], vs)
 opOrder14' (ptree, x:xs, vs)
     | x == Symbol "=" =
-        let (nptree, nxs, nvs) = opOrder7 xs vs
+        let (nptree, nxs, nvs) = opOrder13 xs vs
             (rptree, nnxs, nnvs) = opOrder14' (nptree, nxs, nvs)
         in (Tree x ptree rptree, nnxs, nnvs)
     | otherwise =
         (ptree, x:xs, vs)
+
+
+-- **** TEMPLATE ****
+opOrder13 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder13 xs vs = opOrder13' $ opOrder12 xs vs
+
+opOrder13' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder13' = id
+
+
+-- **** TEMPLATE ****
+opOrder12 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder12 xs vs = opOrder12' $ opOrder11 xs vs
+
+opOrder12' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder12' = id
+
+
+-- **** TEMPLATE ****
+opOrder11 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder11 xs vs = opOrder11' $ opOrder10 xs vs
+
+opOrder11' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder11' = id
+
+
+-- **** TEMPLATE ****
+opOrder10 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder10 xs vs = opOrder10' $ opOrder9 xs vs
+
+opOrder10' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder10' = id
+
+
+-- **** TEMPLATE ****
+opOrder9 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder9 xs vs = opOrder9' $ opOrder8 xs vs
+
+opOrder9' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder9' = id
+
+
+-- **** TEMPLATE ****
+opOrder8 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder8 xs vs = opOrder8' $ opOrder7 xs vs
+
+opOrder8' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder8' = id
+
 
 -- operations: '==', '!='
 -- LEFT associative
@@ -68,20 +118,30 @@ opOrder7' (ptree, x:xs, vs)
     | otherwise =
         (ptree, x:xs, vs)
 
+
 -- operations: '<', '>', '<=', '>='
 -- LEFT associative
 opOrder6 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
-opOrder6 xs vs = opOrder6' $ opOrder4 xs vs
+opOrder6 xs vs = opOrder6' $ opOrder5 xs vs
 
 opOrder6' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
 opOrder6' (ptree, [], vs) = (ptree, [], vs)
 opOrder6' (ptree, x:xs, vs)
     | x == Symbol "<" || x == Symbol ">" || x == Symbol "<=" || x == Symbol ">=" =
-        let (rptree, nxs, nvs) = opOrder4 xs vs
+        let (rptree, nxs, nvs) = opOrder5 xs vs
             nptree = Tree x ptree rptree
         in  opOrder6' (nptree, nxs, nvs)
     | otherwise =
         (ptree, x:xs, vs)
+
+
+-- **** TEMPLATE ****
+opOrder5 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder5 xs vs = opOrder5' $ opOrder4 xs vs
+
+opOrder5' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder5' = id
+
 
 -- operations: '+', '-'
 -- LEFT associative
@@ -98,20 +158,30 @@ opOrder4' (ptree, x:xs, vs)
     | otherwise =
         (ptree, x:xs, vs)
 
+
 -- operations: '*', '/'
 -- LEFT associative
 opOrder3 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
-opOrder3 xs vs = opOrder3' $ opOrder1 xs vs
+opOrder3 xs vs = opOrder3' $ opOrder2 xs vs
 
 opOrder3' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
 opOrder3' (ptree, [], vs) = (ptree, [], vs)
 opOrder3' (ptree, x:xs, vs)
     | x == Symbol "*" || x == Symbol "/" =
-        let (rptree, nxs, nvs) = opOrder1 xs vs
+        let (rptree, nxs, nvs) = opOrder2 xs vs
             nptree = Tree x ptree rptree
         in  opOrder3' (nptree, nxs, nvs)
     | otherwise =
         (ptree, x:xs, vs)
+
+
+-- **** TEMPLATE ****
+opOrder2 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
+opOrder2 xs vs = opOrder2' $ opOrder1 xs vs
+
+opOrder2' :: (ParseTree Token, [Token], VariableScope) -> (ParseTree Token, [Token], VariableScope)
+opOrder2' = id
+
 
 -- operations: ()
 opOrder1 :: [Token] -> VariableScope -> (ParseTree Token, [Token], VariableScope)
