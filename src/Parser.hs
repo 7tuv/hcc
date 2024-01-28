@@ -230,4 +230,4 @@ separator' (ptree, x:xs, vs)
             (rptree, nnxs, nnvs) = separator' (nptree, nxs, nvs)
         in (Tree x ptree rptree, nnxs, nnvs)
     | otherwise =
-        (Tree (Symbol ",") ptree Empty, x:xs, vs)
+        (Tree (Symbol ",") ptree Empty, x:xs, vs)    -- koreiru???

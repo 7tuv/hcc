@@ -57,7 +57,6 @@ epilogue =
      "  ret"
     ]
 
-
 -- <Input>
 -- ParseTree Token: 生成対象の構文木
 -- VariableScope: 使用されている変数のリスト
@@ -95,7 +94,7 @@ genCode (Tree (Symbol "=") lptree rptree) vs cnt1 =
                  "  push rdi"
                 ]
     in  (ncode, cnt21 + cnt22 - 1)
-genCode (Tree (Symbol ",") lptree rptree) vs cnt1 =
+genCode (Tree (Symbol ",") lptree rptree) vs cnt1 = -- 関数引数
     let (code1, cnt21) = genCode rptree vs cnt1  -- push from a last argument
         (code2, cnt22) = genCode lptree vs (cnt1 + cnt21)
     in  (code1 ++ code2, cnt21 + cnt22)
@@ -155,9 +154,9 @@ genCode (Tree (Symbol x) lptree rptree) vs cnt1 =
     in  (ncode, cnt21 + cnt22 - 1)
 genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
     let registers = ["rdi", "rsi", "rdx", "rcx", "r8", "r9"]
-        (code, cnt2) = genCode rptree vs cnt1_
+        (code, cnt2) = genCode rptree vs cnt1_                  -- codeには、引数を後ろから順にpushする処理が入る。cnt2には、引数の数（引数をpushした回数）が入る。
                        where cnt1_ = case cnt1 `mod` 2 == 0 of  -- 引数を評価してpushする前に "cnt1_" でアラインメントを調整する。
-                                         True  -> cnt1          -- （引数が7以上ある場合、calleeが自分のrbpを基準にしてcallerのframe内の値にアクセスするため、
+                                         True  -> cnt1          -- （引数が7以上ある場合、calleeが自身のrbpを基準にしてcallerのframe内にある引数にアクセスするため、
                                          False -> cnt1 + 1      -- calleeとcallerのframe間にpaddingを挟めない。事前にアラインメントの調整が必要。）
         nargOnStack = max 0 (cnt2 - 6)
         fAligned = (cnt1 + nargOnStack) `mod` 2 == 0
@@ -165,11 +164,11 @@ genCode (Tree Function (Leaf (Variable x)) rptree) vs cnt1 =
                     True  -> []
                     False -> ["  sub rsp, 8"]
                 ++
-                code
+                code -- 引数の値を後ろから push する処理
                 ++
-                (concat $ take (min cnt2 6) $ map (\reg -> ["  pop " ++ reg]) registers)
+                (concat $ take (min cnt2 6) $ map (\reg -> ["  pop " ++ reg]) registers)    -- 第1-6引数を、第1引数から順にレジスタに格納する
                 ++
-                ["  call " ++ x]
+                ["  call " ++ x]    -- 関数 x を呼ぶ
                 ++
                 case nargOnStack <= 0 of
                     True  -> []
